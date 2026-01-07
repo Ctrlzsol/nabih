@@ -1,0 +1,120 @@
+
+<!DOCTYPE html>
+<html lang="ar">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nabih | نبيه - الذكاء في الاختيار</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@200;300;400;500;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              nabih: {
+                white: '#FFFFFF',
+                canvas: '#FAFAFA',
+                purple: '#2E0249', 
+                slate: '#1D1D1F',  
+                gold: '#C5A059',
+                silver: '#F5F5F7',
+                border: '#EBEBEB',
+                accent: '#570A57',
+                merchant: '#5D4037',
+                merchantAccent: '#3E2723'
+              }
+            },
+            fontFamily: {
+              display: ['var(--font-display)'],
+              body: ['var(--font-body)'],
+            },
+            boxShadow: {
+              'premium': '0 30px 60px rgba(46, 2, 73, 0.08)',
+              'ethereal': '0 20px 50px rgba(0,0,0,0.03)',
+              'glow': '0 0 20px rgba(197, 160, 89, 0.2)'
+            },
+            animation: {
+              'shimmer': 'shimmer 2s infinite linear',
+            },
+            keyframes: {
+              shimmer: {
+                '0%': { backgroundPosition: '-200% 0' },
+                '100%': { backgroundPosition: '200% 0' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --font-ar: 'Tajawal', sans-serif;
+        --font-en-display: 'Space Grotesk', sans-serif;
+        --font-en-body: 'Outfit', sans-serif;
+      }
+      body {
+        background: #FFFFFF;
+        color: #1D1D1F;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      .rtl { 
+        direction: rtl; 
+        font-family: var(--font-ar); 
+        --font-display: var(--font-ar);
+        --font-body: var(--font-ar);
+      }
+      .ltr { 
+        direction: ltr; 
+        font-family: var(--font-en-body);
+        --font-display: var(--font-en-display);
+        --font-body: var(--font-en-body);
+      }
+      .ltr h1, .ltr h2, .ltr h3, .ltr .font-display {
+        font-family: var(--font-en-display);
+        letter-spacing: -0.03em;
+      }
+      .architectural-grid {
+        background-size: 60px 60px;
+        background-image: radial-gradient(circle, #f0f0f0 1px, transparent 1px);
+      }
+      .noise-overlay {
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        opacity: 0.03;
+        pointer-events: none;
+        z-index: 9999;
+      }
+      input::placeholder { color: rgba(29, 29, 31, 0.15); }
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-thumb { background: #2E0249; border-radius: 10px; }
+    </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "framer-motion": "https://esm.sh/framer-motion@11.18.0",
+        "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+        "react/": "https://esm.sh/react@^19.2.3/",
+        "react": "https://esm.sh/react@^19.2.3",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+        "react-dom": "https://esm.sh/react-dom@^19.2.3",
+        "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.89.0",
+        "recharts": "https://esm.sh/recharts@^2.12.0",
+        "jspdf": "https://esm.sh/jspdf@2.5.1",
+        "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.2"
+      }
+    }
+    </script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div class="noise-overlay"></div>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
