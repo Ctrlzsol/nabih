@@ -4,7 +4,15 @@ import { supabase } from '../../lib/supabase';
 import { ComparisonResult, Language, SearchPreferences, ProductOption, HistoryItem, MerchantAd } from '../../config/types';
 import { COUNTRIES, STORE_SEARCH_PATTERNS } from '../../config/constants';
 
-const API_KEY = process.env.API_KEY; 
+// Safe environment variable access
+const getEnvVar = (key: string) => {
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[key];
+  }
+  return undefined;
+};
+
+const API_KEY = getEnvVar('API_KEY'); 
 const MODEL_ENGINE = 'gemini-3-pro-preview'; 
 
 // --- SEARCH HISTORY LOGIC ---
@@ -61,10 +69,10 @@ export const getRecentSearchActivity = async () => {
 
 export const searchMerchantAds = async (query: string, countryCode: string): Promise<MerchantAd[]> => {
     try {
-        // Query the 'ads' table for active ads
+        // Query the 'ads' table for active ads, join with campaigns
         const { data, error } = await supabase
             .from('ads') 
-            .select('*')
+            .select('*, campaigns(title)')
             .eq('status', 'active')
             .eq('is_deleted', false)
             .ilike('title', `%${query}%`)
@@ -93,7 +101,8 @@ export const searchMerchantAds = async (query: string, countryCode: string): Pro
             impressions: ad.impressions || 0,
             clicks: ad.clicks || 0,
             ctr: ad.ctr || 0,
-            createdAt: ad.created_at
+            createdAt: ad.created_at,
+            campaignName: ad.campaigns?.title || undefined
         }));
     } catch (err) {
         console.error("Error searching merchant ads:", err);
@@ -274,6 +283,12 @@ export const performComparison = async (
         return cachedData.result as ComparisonResult;
       }
     } catch (err) {}
+  }
+
+  // Check if API Key is available
+  if (!API_KEY) {
+      console.warn("API_KEY is missing. Search functionality will be limited.");
+      throw new Error(isAr ? "خدمة البحث غير متوفرة حالياً (تكوين النظام)." : "Search service unavailable (System Config).");
   }
 
   const ai = new GoogleGenAI({ apiKey: API_KEY });

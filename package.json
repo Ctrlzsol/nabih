@@ -1,5 +1,5 @@
 {
-  "name": "nabih-|-نبيه",
+  "name": "copy-of-nabih-|-نبيه",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -17,7 +17,8 @@
     "@supabase/supabase-js": "^2.89.0",
     "recharts": "^2.12.0",
     "jspdf": "2.5.1",
-    "jspdf-autotable": "3.8.2"
+    "jspdf-autotable": "3.8.2",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

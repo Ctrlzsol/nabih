@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Component, ReactNode } from 'react';
 import { motion as motionBase, AnimatePresence } from 'framer-motion';
 import Layout from '../ui/layout/Layout';
 import LandingView from '../ui/views/LandingView';
@@ -16,14 +16,14 @@ import { NabihLogo } from '../ui/components/NabihLogo';
 const motion = motionBase as any;
 
 interface ErrorBoundaryProps {
-  children?: React.ReactNode;
+  children?: ReactNode;
 }
 
 interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };

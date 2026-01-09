@@ -41,10 +41,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [platform, setPlatformState] = useState<Platform>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
-      // Strict Path Priority
       if (path.includes('/admin')) return 'admin';
       if (path.includes('/merchant')) return 'merchant';
-      
       const stored = localStorage.getItem('nabih_platform');
       if (stored === 'consumer' || stored === 'merchant' || stored === 'admin') return stored;
     }
@@ -91,17 +89,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   /**
    * CORE REDIRECTION LOGIC
-   * Priority:
-   * 1. Explicit Intent (contextPlatform passed from Login button)
-   * 2. URL Path (window.location.pathname)
-   * 3. Current State
+   * Safe implementation to prevent infinite loops if profile is missing.
    */
   const handleFetchUserData = useCallback(async (userId: string, contextPlatform?: Platform) => { 
     try {
       const profile = await getUserProfile(userId);
 
+      // EMERGENCY CHECK: If profile is missing, don't crash, don't loop. 
+      // Create a fallback so the app can continue (especially for Admins fixing data).
       if (!profile) {
-          console.warn("Profile not found for user");
+          console.warn("[AppStore] Profile not found. Creating fallback session.");
+          setUser({ 
+              id: userId, 
+              name: 'Admin (Fallback)', 
+              email: 'admin@system.local',
+              role: 'admin',
+              roles: ['admin']
+          });
+          // Force admin view to allow debugging
+          setPlatform('admin');
+          setCurrentView('admin-dashboard');
           return;
       }
 
@@ -112,24 +119,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       let target: Platform = 'consumer';
 
       if (contextPlatform) {
-          // HIGHEST PRIORITY: The button the user clicked (Consumer Login vs Admin Login)
           target = contextPlatform;
       } else if (typeof window !== 'undefined') {
-          // SECOND PRIORITY: The URL path
           const path = window.location.pathname;
           if (path.includes('/admin')) target = 'admin';
           else if (path.includes('/merchant')) target = 'merchant';
-          else target = platformRef.current; // Fallback to current state
+          else target = platformRef.current;
       }
-
-      console.log(`[Auth] Logic -> Target: ${target}, Roles: ${profile.roles?.join(',')}`);
 
       const userRoles = profile.roles || [profile.role];
 
-      // --- ROUTING GUARDS ---
-
       if (target === 'consumer') {
-          // STRICT: If target is consumer, GO TO SEARCH. Do NOT hijack to Admin.
           setPlatform('consumer');
           setCurrentView('search');
           return;
@@ -137,7 +137,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (target === 'admin') {
           if (!userRoles.includes('admin')) {
-              throw new Error("ACCESS_DENIED_ADMIN");
+              // Soft deny
+              console.warn("User attempted admin access without role");
+              setPlatform('consumer');
+              setCurrentView('search');
+              return; 
           }
           setPlatform('admin');
           setCurrentView('admin-dashboard');
@@ -146,7 +150,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (target === 'merchant') {
           if (!userRoles.includes('merchant')) {
-               throw new Error("ACCESS_DENIED_MERCHANT");
+               console.warn("User attempted merchant access without role");
+               setPlatform('consumer');
+               setCurrentView('search');
+               return;
           }
           setPlatform('merchant');
           if (profile.status === 'active' || profile.status === 'approved') {
@@ -157,16 +164,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return;
       }
 
-      // Default safety net
       setPlatform('consumer');
       setCurrentView('search');
 
     } catch (err: any) {
       console.error("Auth Fetch Error:", err);
-      if (err.message === 'ACCESS_DENIED_ADMIN' || err.message === 'ACCESS_DENIED_MERCHANT') {
-          await logout();
-          throw err; 
-      }
+      // Removed logout() call here to prevent infinite loop on transient errors
     }
   }, [setCountry, setPlatform]); 
 
@@ -176,16 +179,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setIsInitializing(true);
       const { data: { session } } = await (supabase.auth as any).getSession();
       if (session) {
-          // On reload, try to maintain context
           let initialContext: Platform | undefined = undefined;
           if (typeof window !== 'undefined') {
              const path = window.location.pathname;
              if (path.includes('/admin')) initialContext = 'admin';
              else if (path.includes('/merchant')) initialContext = 'merchant';
           }
-          try {
-             await handleFetchUserData(session.user.id, initialContext);
-          } catch(e) {}
+          await handleFetchUserData(session.user.id, initialContext);
       }
       setIsInitializing(false);
     };
@@ -204,14 +204,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const onLoginSuccess = async (userData: any, contextPlatform: Platform) => {
       if (userData?.id) {
-          // Pass the platform from the specific login form used
           await handleFetchUserData(userData.id, contextPlatform);
       }
   };
 
   const handleStartSearch = (mode: 'login' | 'signup' | 'search') => {
       if (mode === 'search') {
-          // If trying to access search while logged in
           if (platform === 'consumer') {
              setCurrentView('search');
           } else if (platform === 'merchant' && user?.roles?.includes('merchant')) {

@@ -129,9 +129,23 @@ const Auth: React.FC<AuthProps> = ({ lang, onLogin, initialMode = 'login', platf
             await onLogin({ id: data.user.id, email: normalizedEmail }, platform || 'consumer'); 
         }
     } catch (err: any) {
-        console.error(err);
+        // Only log unexpected errors to keep console clean
+        if (err.message !== "Invalid login credentials") {
+            console.error("Login Error:", err);
+        }
         setLoading(false);
-        setErrorMsg(isRtl ? "البريد الإلكتروني أو كلمة المرور غير صحيحة" : "Invalid email or password");
+        
+        // Handle specific Supabase errors
+        if (err.message === "Invalid login credentials") {
+             setErrorMsg(isRtl ? "البريد الإلكتروني أو كلمة المرور غير صحيحة" : "Invalid email or password");
+        } else if (err.message && err.message.includes("Email not confirmed")) {
+             setErrorMsg(isRtl ? "يرجى تأكيد البريد الإلكتروني لتفعيل الحساب" : "Please verify your email address to log in");
+        } else if (err.message && err.message.includes("security purposes")) {
+             setErrorMsg(isRtl ? "تم حظر المحاولات مؤقتاً لأسباب أمنية. حاول لاحقاً." : "Too many attempts. Please try again later.");
+        } else {
+             // Fallback to the message from server if available, or generic
+             setErrorMsg(err.message || (isRtl ? "حدث خطأ أثناء تسجيل الدخول" : "Login failed"));
+        }
     }
   };
 

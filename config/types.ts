@@ -1,9 +1,10 @@
 
+
 export type Language = 'en' | 'ar';
 export type Platform = 'consumer' | 'merchant' | 'admin';
 export type UserRole = 'consumer' | 'merchant' | 'admin' | 'individual';
 export type AccountStatus = 'active' | 'pending' | 'suspended' | 'deleted' | 'rejected' | 'approved';
-export type AdStatus = 'draft' | 'pending_review' | 'active' | 'paused' | 'rejected' | 'deleted';
+export type AdStatus = 'draft' | 'pending_review' | 'active' | 'paused' | 'rejected' | 'deleted' | 'suspended' | 'removed';
 
 export interface SearchPreferences {
   priority: 'balanced' | 'price' | 'quality' | 'excellent_condition';
@@ -28,6 +29,10 @@ export interface UserProfile {
   taxNumber?: string;
   storeCategory?: string;
   storeAddress?: string;
+  websiteUrl?: string;
+  locationUrl?: string;
+  contactEmail?: string;
+  branches?: { name: string; phone: string; address?: string }[];
   createdAt: string;
   isDeleted?: boolean;
 }
@@ -58,6 +63,10 @@ export interface MerchantAd {
   createdAt: string;
   expiryDate?: string;
   isDeleted?: boolean;
+  // New Fields for Campaign Separation
+  entryType?: 'single' | 'campaign';
+  campaignId?: string;
+  campaignName?: string;
 }
 
 export interface ProductOption {
@@ -88,6 +97,7 @@ export interface ProductOption {
   stockStatus?: string;
   nabihVerdict?: string;
   adNumber?: string;
+  campaignName?: string;
 }
 
 export interface ComparisonResult {

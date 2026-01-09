@@ -9,7 +9,7 @@ import {
   ListChecks, ThumbsUp, ThumbsDown, ChevronDown, 
   ChevronUp, Truck, ShieldCheck, RefreshCw, MessageSquareQuote,
   Lightbulb, ImageIcon, Zap, ExternalLink, Scale, Hash, Package,
-  MapPin, Share2, Globe, Search, Calendar, Coins, CheckCircle
+  MapPin, Share2, Globe, Search, Calendar, Coins, CheckCircle, Flame
 } from 'lucide-react';
 
 const motion = motionBase as any;
@@ -244,6 +244,15 @@ const ComparisonCard: React.FC<ComparisonCardProps> = ({ option, lang, onCompare
            </button>
         </div>
       </div>
+
+      {option.campaignName && (
+        <div className="mb-4">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-nabih-purple to-nabih-accent text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
+                <Flame size={12} className="fill-nabih-gold text-nabih-gold" />
+                {isRtl ? 'جزء من حملة:' : 'Part of:'} {option.campaignName}
+            </span>
+        </div>
+      )}
 
       <div className={`relative h-64 w-full bg-nabih-canvas/30 rounded-[2rem] mb-6 flex items-center justify-center overflow-hidden border ${isAd ? 'border-nabih-merchant/20' : 'border-nabih-border/50'} group-hover:bg-nabih-silver/20 transition-colors`}>
         {imgStage === 3 ? (

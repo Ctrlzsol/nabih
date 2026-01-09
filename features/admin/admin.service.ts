@@ -1,76 +1,119 @@
 
 import { supabase } from '../../lib/supabase';
-import { UserProfile, MerchantAd, AccountStatus, AdStatus, UserRole, HistoryItem } from '../../config/types';
+import { UserProfile, MerchantAd, AccountStatus, AdStatus } from '../../config/types';
+
+// --- STRICT ANALYTICS FETCHING ---
+
+export const fetchIndividualStats = async () => {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'individual');
+    return data || [];
+  } catch (error) {
+    return [];
+  }
+};
+
+export const fetchMerchantStats = async () => {
+  try {
+    const { data } = await supabase
+      .from('merchants')
+      .select('*');
+    return data || [];
+  } catch (error) {
+    return [];
+  }
+};
+
+export const getStrictSystemCounts = async () => {
+  try {
+    const { count: individualCount } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'individual');
+    
+    const { count: merchantCount } = await supabase
+      .from('merchants')
+      .select('*', { count: 'exact', head: true });
+    
+    // Check for active ads (not deleted)
+    const { count: adsCount } = await supabase
+      .from('ads')
+      .select('*', { count: 'exact', head: true })
+      .neq('status', 'deleted');
+
+    return {
+      individuals: individualCount || 0,
+      merchants: merchantCount || 0,
+      ads: adsCount || 0
+    };
+  } catch (err) {
+    return { individuals: 0, merchants: 0, ads: 0 };
+  }
+};
+
+// --- STATS ---
+export const getRealTimeStats = async () => {
+  try {
+    const stats = await getStrictSystemCounts();
+    return {
+      individualCount: stats.individuals,
+      merchantCount: stats.merchants,
+      adminCount: 1, 
+      activeAdCount: stats.ads,
+      campaignCount: 0
+    };
+  } catch (error) {
+    return { individualCount: 0, merchantCount: 0, adminCount: 0, activeAdCount: 0, campaignCount: 0 };
+  }
+};
 
 // --- USERS MANAGEMENT ---
 
 export const getAllUsers = async (): Promise<UserProfile[]> => {
   try {
-    // 1. Fetch ALL profiles (Source of Truth)
-    const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-    if (profileError) {
-        console.error("Admin Service: Error fetching profiles", profileError.message);
-        // Fail gracefully to allow UI to render empty state rather than crash
-    }
-
-    // 2. Fetch ALL Roles
+    const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     const { data: rolesData } = await supabase.from('user_roles').select('*');
-
-    // 3. Fetch ALL Merchant Requests
-    const { data: requests } = await supabase.from('merchant_requests').select('*');
-
+    const { data: merchantsData } = await supabase.from('merchants').select('*'); // Fetch source of truth for merchants
+    
     const safeProfiles = profiles || [];
     const safeRoles = rolesData || [];
-    const safeRequests = requests || [];
+    const safeMerchants = merchantsData || [];
 
-    // 4. Map and Merge Data with Strict Logic
     return safeProfiles.map((p: any) => {
-        // Determine roles from DB
         const userRoleEntries = safeRoles.filter((r: any) => r.user_id === p.id);
-        let userRoles: UserRole[] = userRoleEntries.map((r: any) => r.role as UserRole);
-
-        // SYNC LOGIC: If no roles in DB, they are INDIVIDUAL by default.
-        if (userRoles.length === 0) {
-            userRoles = ['individual'];
-        }
-
-        // Merchant Request Check - Attach store details if available
-        const reqObj = safeRequests.find((r: any) => r.user_id === p.id);
-
-        // Determine Primary Status
-        let status: AccountStatus = p.status || 'active';
+        const userRoles = userRoleEntries.map((r: any) => r.role);
         
-        // If they have a merchant component, prioritize merchant status
-        if (userRoles.includes('merchant') && reqObj) {
-            status = reqObj.status as AccountStatus;
+        if (p.role && !userRoles.includes(p.role)) {
+            userRoles.push(p.role);
         }
+        
+        if (userRoles.length === 0) {
+            userRoles.push('individual');
+        }
+
+        // Find merchant details if available
+        const merchant = safeMerchants.find((m: any) => m.id === p.id);
 
         return {
             id: p.id,
-            name: p.full_name || 'مستخدم نبيه',
-            email: p.email || 'No Email',
-            phone: p.phone || '-',
+            name: p.full_name || 'User',
+            email: p.email || '',
+            phone: merchant?.phone || p.phone || '', // Prefer merchant phone
             country: p.country || 'JO',
-            // Primary role for display (Admin > Merchant > Individual)
             role: userRoles.includes('admin') ? 'admin' : userRoles.includes('merchant') ? 'merchant' : 'individual',
-            roles: userRoles, // Complete array for Hybrid detection
-            status: status,
-            storeName: reqObj?.store_name,
-            crNumber: reqObj?.commercial_register,
-            taxNumber: reqObj?.tax_number,
-            storeCategory: reqObj?.store_category,
-            storeAddress: reqObj?.store_address,
+            roles: userRoles,
+            status: p.status || 'active',
             createdAt: p.created_at || new Date().toISOString(),
-            isDeleted: p.is_deleted || false
+            storeName: merchant?.store_name || p.store_name, // Prefer merchant table store_name
+            crNumber: p.cr_number,
+            storeCategory: p.store_category
         };
-    }).filter(p => !p.isDeleted); // Soft delete filter
-
-  } catch (err: any) {
-    console.error("Admin: Get Users Failed", err.message || err);
+    });
+  } catch (err) {
+    console.error("Admin: Get Users Failed", err);
     return [];
   }
 };
@@ -81,65 +124,68 @@ export const updateUserProfile = async (userId: string, updates: any) => {
         full_name: updates.name,
         phone: updates.phone,
         country: updates.country,
-        email: updates.email 
     }).eq('id', userId);
-
-    if (error) throw error;
-    return true;
-  } catch (err: any) { 
-      console.error("Update Profile Error", err.message || err);
-      return false; 
-  }
+    return !error;
+  } catch { return false; }
 };
 
-// --- MULTI-ROLE TOGGLE LOGIC ---
-export const toggleUserRole = async (userId: string, role: string, shouldHaveRole: boolean) => {
+export const toggleUserRole = async (userId: string, roleToToggle: string, shouldHaveRole: boolean): Promise<{ success: boolean; message?: string }> => {
   try {
     if (shouldHaveRole) {
       const { error } = await supabase
         .from('user_roles')
-        .insert({ user_id: userId, role: role });
+        .upsert(
+            { user_id: userId, role: roleToToggle }, 
+            { onConflict: 'user_id, role' }
+        );
 
-      if (error && error.code !== '23505') throw error; // Ignore duplicates
+      if (error) return { success: false, message: `Failed to add role: ${error.message}` };
     } else {
       const { error } = await supabase
         .from('user_roles')
         .delete()
-        .eq('user_id', userId)
-        .eq('role', role);
-
-      if (error) throw error;
+        .match({ user_id: userId, role: roleToToggle });
+        
+      if (error) return { success: false, message: `Failed to remove role: ${error.message}` };
     }
-    return true;
-  } catch (err: any) {
-    console.error("Toggle Role Final Error:", err.message || err);
-    return false;
+
+    const { data: currentRoles } = await supabase.from('user_roles').select('role').eq('user_id', userId);
+    let roleList = currentRoles?.map((r: any) => r.role) || [];
+    
+    if (shouldHaveRole && !roleList.includes(roleToToggle)) roleList.push(roleToToggle);
+    else if (!shouldHaveRole) roleList = roleList.filter((r: string) => r !== roleToToggle);
+
+    let primaryRole = 'individual';
+    if (roleList.includes('admin')) primaryRole = 'admin';
+    else if (roleList.includes('merchant')) primaryRole = 'merchant';
+    
+    await supabase.from('profiles').update({ role: primaryRole }).eq('id', userId);
+
+    return { success: true };
+  } catch (err: any) { 
+    return { success: false, message: err.message || "Unknown error occurred" }; 
   }
 };
 
 export const deleteUserAccount = async (userId: string) => {
-    try {
-        await supabase.from('profiles').update({ is_deleted: true, status: 'deleted' }).eq('id', userId);
-    } catch (e: any) {
-        console.error("Soft delete failed:", e.message || e);
-    }
+    try { 
+        const { error } = await supabase.from('profiles').update({ status: 'deleted' }).eq('id', userId);
+        if (error) await supabase.from('profiles').delete().eq('id', userId);
+    } catch {}
 };
 
-// --- ADS / CONTENT CONTROL ---
+// --- ADS ---
 
 export const getAllAds = async (): Promise<MerchantAd[]> => {
     try {
-        const { data, error } = await supabase
-            .from('ads') 
-            .select('*')
-            .order('created_at', { ascending: false }); // Newest first
-        
-        if (error) throw error;
-
-        let filteredAds = data || [];
-        filteredAds = filteredAds.filter((ad: any) => ad.is_deleted !== true && ad.status !== 'deleted');
-
-        return filteredAds.map((ad: any) => ({
+        // ADMIN VIEW: Join with campaigns to get name
+        const { data } = await supabase
+            .from('ads')
+            .select('*, campaigns(title)')
+            .neq('status', 'deleted') // Filter deleted ads by default in standard view
+            .order('created_at', { ascending: false });
+            
+        return (data || []).map((ad: any) => ({
             id: ad.id,
             merchantId: ad.merchant_id,
             merchantName: ad.merchant_name,
@@ -147,72 +193,70 @@ export const getAllAds = async (): Promise<MerchantAd[]> => {
             description: ad.description,
             imageUrl: ad.image_url,
             targetUrl: ad.target_url,
-            targetCountries: ad.target_countries,
             category: ad.category,
-            tags: ad.tags,
             status: ad.status,
-            rejectionReason: ad.rejection_reason, 
-            impressions: ad.impressions,
-            clicks: ad.clicks,
-            ctr: ad.ctr,
-            createdAt: ad.created_at
+            createdAt: ad.created_at,
+            entryType: ad.entry_type || 'single',
+            campaignId: ad.campaign_id,
+            campaignName: ad.campaigns?.title, // Mapped from join
+            isDeleted: ad.status === 'deleted', // Ensure we map deletion status
+            rejectionReason: ad.rejection_reason // Map rejection reason
         }));
-    } catch (e: any) {
-        console.error("Get Ads Error", e.message || e);
-        return [];
-    }
+    } catch { return []; }
 };
 
 export const updateAdStatus = async (adId: string, status: AdStatus) => {
     try {
-        const updateData: any = { 
-            status: status,
-            updated_at: new Date().toISOString()
-        };
-        
-        // CRITICAL FIX: Explicitly nullify rejection reason on approval
-        if (status === 'active') {
-            updateData.rejection_reason = null;
-        }
-
-        const { error } = await supabase.from('ads').update(updateData).eq('id', adId);
-        
+        const { error } = await supabase.from('ads').update({ status }).eq('id', adId);
         if (error) throw error;
         return true;
-    } catch (e: any) {
-        const msg = e.message || e.toString();
-        console.error("Update Ad Status Failed:", msg);
-        return false;
+    } catch (e) { return false; }
+};
+
+export const bulkSuspendAds = async (adIds: string[], reason: string) => {
+    try {
+        if (!adIds || adIds.length === 0) return { success: true };
+
+        // USE RPC 'suspend_ad_entry'
+        const promises = adIds.map(id => 
+            supabase.rpc('suspend_ad_entry', { 
+                ad_id: id, 
+                reason: reason 
+            })
+        );
+
+        const results = await Promise.all(promises);
+        
+        const failure = results.find(r => r.error);
+        if (failure?.error) throw failure.error;
+
+        return { success: true };
+    } catch (err: any) {
+        console.error("Bulk Suspend RPC Error:", err);
+        return { success: false, message: err.message || "Unknown RPC error" };
     }
 };
 
-export const updateAdStatusWithReason = async (adId: string, status: AdStatus, reason: string) => {
+export const removeAdEntries = async (adIds: string[], reason: string) => {
+    if (!adIds || adIds.length === 0) return { success: true };
     try {
-        const { error } = await supabase.from('ads').update({ 
-            status: status,
-            rejection_reason: reason,
-            updated_at: new Date().toISOString()
-        }).eq('id', adId);
+        // USE NEW RPC 'soft_delete_ad' with Reason
+        const promises = adIds.map(id => 
+            supabase.rpc('soft_delete_ad', { 
+                ad_id: id,
+                reason: reason
+            })
+        );
         
-        if (error) throw error;
-        return true;
-    } catch (e: any) {
-        const msg = e.message || e.toString();
-        console.error("Update Ad Status w/ Reason Error:", msg);
-        return false;
-    }
-};
+        const results = await Promise.all(promises);
 
-export const deleteAd = async (adId: string, reason?: string) => {
-    try {
-        const updates: any = { is_deleted: true, status: 'deleted', updated_at: new Date().toISOString() };
-        if (reason) updates.rejection_reason = reason;
-        await supabase.from('ads').update(updates).eq('id', adId); 
-        return true;
-    } catch (e: any) {
-        const msg = e.message || e.toString();
-        console.error("Delete Ad Failed:", msg);
-        return false;
+        const failure = results.find(r => r.error);
+        if (failure?.error) throw failure.error;
+
+        return { success: true };
+    } catch (err: any) {
+         console.error("Remove Ads RPC Error:", err);
+         return { success: false, message: err.message || "Unknown error" };
     }
 };
 
@@ -220,38 +264,12 @@ export const deleteAd = async (adId: string, reason?: string) => {
 
 export const getGlobalSearchHistory = async (): Promise<any[]> => {
     try {
-        const { data: history, error } = await supabase
-            .from('search_history')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(500); 
-        
-        if (error) throw error;
-        if (!history || history.length === 0) return [];
-
-        const userIds = Array.from(new Set(history.map((h: any) => h.user_id).filter(Boolean)));
-        let profilesMap: Record<string, string> = {};
-        
-        if (userIds.length > 0) {
-            const { data: profiles } = await supabase
-                .from('profiles')
-                .select('id, full_name')
-                .in('id', userIds);
-            
-            if (profiles) {
-                profiles.forEach((p: any) => { profilesMap[p.id] = p.full_name; });
-            }
-        }
-
-        return history.map((item: any) => ({
+        const { data } = await supabase.from('search_history').select('*').order('created_at', { ascending: false }).limit(200);
+        return (data || []).map((item: any) => ({
             id: item.id,
             query: item.query,
             country: item.country,
-            userName: profilesMap[item.user_id] || 'Guest',
             timestamp: item.created_at
         }));
-    } catch (e: any) {
-        console.error("Get History Failed:", e.message || e);
-        return [];
-    }
+    } catch { return []; }
 };
